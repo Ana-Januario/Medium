@@ -473,3 +473,73 @@ table(Yobs,Yest)
 #Acerto
 (419+278)/(419+278+64+130)
 #De fato o nosso modelo acertou 78% da sobrevivencia
+
+#Vamos fazer a predição nos dados de teste
+
+titanic.test<- read.csv("test_titanic_kaggle.csv", sep = ';',  header= T)
+str(titanic.test)
+#temos que add a coluna survive
+titanic.test$Survived <- NA
+#Temos que adequar as variáveis de interesse
+str(dados)
+
+#Poderia ter feito tudo junto como fiz no codigo anterior, mas vou fazer separadamente
+
+table(titanic.test$Embarked) #não há NA
+titanic.test$Embarked<- as.factor(titanic.test$Embarked)
+
+titanic.test$Pclass<-ifelse(titanic.test$Pclass==1, '1st class', ifelse(titanic.test$Pclass==2, '2nd class', '3rd class'))
+titanic.test$Pclass<- as.factor(titanic.test$Pclass)
+table(titanic.test$Pclass)
+
+titanic.test$Sex<- as.factor(titanic.test$Sex)
+
+titanic.test$Fare<-gsub(",", ".", titanic.test$Fare)
+titanic.test$Fare<-as.numeric(titanic.test$Fare)
+sum(is.na(titanic.test$Fare))
+#Vou substituir pela mediana por ser apenas 
+library(fBasics)
+basicStats(titanic.test$Fare)
+#mediana=14.454200
+titanic.test$Fare[is.na(titanic.test$Fare)]<-14.454200
+table(is.na(titanic.test$Fare))
+
+#com a idade faremos uso do modelo
+titanic.test$Age<-as.numeric(titanic.test$Age)
+sum(is.na(titanic.test$Age))
+
+#vamos aplicar o mesmo modelo ja construido
+
+#as linhas com NAs na idade
+Age.row2<-titanic.test[
+  is.na(titanic.test$Age),
+  c("Pclass", "Sex", "Fare", "SibSp", "Parch", "Embarked")
+]
+
+#predição da idade, considerando nosso modelo
+Age.predictions2<-predict(Age.model, newdata = Age.row2)
+
+titanic.test[is.na(titanic.test$Age), "Age"] <- Age.predictions2
+basicStats(titanic.test$Age) #sem valores negativos
+table(is.na(titanic.test$Age))
+
+#agora vamos fazer a coluna Age_transformed que está presente em nosso modelo
+titanic.test$Age_transformed <- (titanic.test$Age^lambda - 1) / lambda
+
+
+#agora sim... Vamos fazer a previsão de sobrevivencia com nosso modelo fitINT6
+
+Survived<-predict(fitINT6, newdata = titanic.test)
+#vamos usar como ponto de corte da sobrevivencia o valor da curva ROC
+
+resultRL<- as.factor(ifelse(Survived > 0.284,  "1", "0"))
+table(resultRL)
+
+PassengerId <- titanic.test$PassengerId
+output.df<-as.data.frame(PassengerId)
+output.df$Survived<- resultRL
+tail(output.df)
+
+write.csv(output.df, file="kaggle_submission4RL.csv", row.names = FALSE)
+
+#se a base de dados não alterou com nosso modelo atingimos uma taxa de acerto de 76%
